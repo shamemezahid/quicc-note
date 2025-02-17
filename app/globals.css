@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn-animation {
+    transform: scale(1);
+    transition: transform 0.2s cubic-bezier(.1,-0.1,.75,1.4);
+  }
+  
+  .btn-animation:active {
+    transform: scale(0.95);
+  }
+}
