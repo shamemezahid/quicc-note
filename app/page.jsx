@@ -221,7 +221,7 @@ export default function Home() {
   };
 
   return (
-    <div className="w-fit mx-auto flex flex-col items-center justify-center gap-8 p-8">
+    <div className="w-fit mx-auto flex flex-col items-center justify-center gap-4 p-4">
       <div className="w-full flex gap-4 justify-between flex-wrap">
         <div className="flex gap-4 items-center">
           <h1 className="text-3xl font-extrabold">Quicc Notes</h1>
@@ -260,112 +260,116 @@ export default function Home() {
               <Printer size={16} className="stroke-white" />
             </button>
           ) : (
-            <>
-              <button
-                title="Brush Tool"
-                onClick={() => setTool("brush")}
-                className={`p-3 rounded-2xl btn-animation ${
-                  tool === "brush"
-                    ? "bg-neutral-950 text-white"
-                    : "bg-gray-200 text-gray-700"
-                }`}
-              >
-                <BrushIcon size={16} />
-              </button>
-              <button
-                title="Eraser Tool"
-                onClick={() => setTool("eraser")}
-                className={`p-3 rounded-2xl btn-animation ${
-                  tool === "eraser"
-                    ? "bg-neutral-950 text-white"
-                    : "bg-gray-200 text-gray-700"
-                }`}
-              >
-                <EraserIcon size={16} />
-              </button>
-              <div
-                title="Pick Color"
-                className="relative p-3 rounded-2xl flex gap-3 items-center outline outline-8 -outline-offset-8 bg-gray-200"
-                style={{ outlineColor: color }}
-              >
-                <Palette size={16} />
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  style={{ appearance: "none", border: "none" }}
-                  className="absolute inset-0 h-8 w-8 opacity-0 rounded"
-                />
-              </div>
-              <div className="relative" ref={widthPickerRef}>
+            <div className="flex gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
                 <button
-                  title="Adjust Brush Size"
-                  onClick={() => setShowWidthPicker(!showWidthPicker)}
-                  className={`w-10 h-10 flex items-center justify-center p-3 rounded-2xl bg-gray-200 text-gray-700 font-medium btn-animation`}
+                  title="Brush Tool"
+                  onClick={() => setTool("brush")}
+                  className={`p-3 rounded-2xl btn-animation ${
+                    tool === "brush"
+                      ? "bg-neutral-950 text-white"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
                 >
-                  {width}
+                  <BrushIcon size={16} />
                 </button>
+                <button
+                  title="Eraser Tool"
+                  onClick={() => setTool("eraser")}
+                  className={`p-3 rounded-2xl btn-animation ${
+                    tool === "eraser"
+                      ? "bg-neutral-950 text-white"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  <EraserIcon size={16} />
+                </button>
+                <div
+                  title="Pick Color"
+                  className="relative p-3 rounded-2xl flex gap-3 items-center outline outline-8 -outline-offset-8 bg-gray-200"
+                  style={{ outlineColor: color }}
+                >
+                  <Palette size={16} />
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    style={{ appearance: "none", border: "none" }}
+                    className="absolute inset-0 h-8 w-8 opacity-0 rounded"
+                  />
+                </div>
+                <div className="relative" ref={widthPickerRef}>
+                  <button
+                    title="Adjust Brush Size"
+                    onClick={() => setShowWidthPicker(!showWidthPicker)}
+                    className={`w-10 h-10 flex items-center justify-center p-3 rounded-2xl bg-gray-200 text-gray-700 font-medium btn-animation`}
+                  >
+                    {width}
+                  </button>
 
-                {showWidthPicker && (
-                  <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-2xl shadow-lg border border-gray-200 z-10">
-                    <input
-                      type="range"
-                      min="1"
-                      max="50"
-                      value={width}
-                      onChange={(e) => setWidth(parseInt(e.target.value))}
-                      className="w-32"
-                    />
-                    <div className="text-center mt-1 text-sm text-gray-600">
-                      Stroke Width: <strong>{width}</strong>
+                  {showWidthPicker && (
+                    <div className="absolute top-full right-0 mt-2 p-4 bg-white rounded-2xl shadow-lg border border-gray-200 z-10">
+                      <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        value={width}
+                        onChange={(e) => setWidth(parseInt(e.target.value))}
+                        className="w-32"
+                      />
+                      <div className="text-center mt-1 text-sm text-gray-600">
+                        Stroke Width: <strong>{width}</strong>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-              <button
-                title="Undo"
-                onClick={undo}
-                disabled={historyIndex <= 0}
-                className={`p-3 rounded-2xl btn-animation ${
-                  historyIndex <= 0
-                    ? "bg-gray-100 text-gray-400"
-                    : "bg-gray-200 text-gray-700"
-                }`}
-              >
-                <Undo2Icon size={16} />
-              </button>
-              <button
-                title="Redo"
-                onClick={redo}
-                disabled={historyIndex >= history.length - 1}
-                className={`p-3 rounded-2xl btn-animation ${
-                  historyIndex >= history.length - 1
-                    ? "bg-gray-100 text-gray-400"
-                    : "bg-gray-200 text-gray-700"
-                }`}
-              >
-                <Redo2Icon size={16} />
-              </button>
-              <button
-                title="Export as PNG"
-                onClick={exportToPNG}
-                className="p-3 bg-neutral-950 text-white rounded-2xl btn-animation"
-              >
-                <Download size={16} className="stroke-white" />
-              </button>
-              <button
-                title="Clear Canvas"
-                onClick={() => {
-                  clearCanvas();
-                  if (socketReady) {
-                    socket.emit("clear-canvas");
-                  }
-                }}
-                className="p-3 bg-red-500 text-white rounded-2xl btn-animation"
-              >
-                <Trash2Icon size={16} className="stroke-white" />
-              </button>
-            </>
+              <div className="flex gap-4 items-center">
+                <button
+                  title="Undo"
+                  onClick={undo}
+                  disabled={historyIndex <= 0}
+                  className={`p-3 rounded-2xl btn-animation ${
+                    historyIndex <= 0
+                      ? "bg-gray-100 text-gray-400"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  <Undo2Icon size={16} />
+                </button>
+                <button
+                  title="Redo"
+                  onClick={redo}
+                  disabled={historyIndex >= history.length - 1}
+                  className={`p-3 rounded-2xl btn-animation ${
+                    historyIndex >= history.length - 1
+                      ? "bg-gray-100 text-gray-400"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  <Redo2Icon size={16} />
+                </button>
+                <button
+                  title="Export as PNG"
+                  onClick={exportToPNG}
+                  className="p-3 bg-neutral-950 text-white rounded-2xl btn-animation"
+                >
+                  <Download size={16} className="stroke-white" />
+                </button>
+                <button
+                  title="Clear Canvas"
+                  onClick={() => {
+                    clearCanvas();
+                    if (socketReady) {
+                      socket.emit("clear-canvas");
+                    }
+                  }}
+                  className="p-3 bg-red-500 text-white rounded-2xl btn-animation"
+                >
+                  <Trash2Icon size={16} className="stroke-white" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
