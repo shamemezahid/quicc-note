@@ -2,7 +2,6 @@
 
 import {
   BrushIcon,
-  DeleteIcon,
   EraserIcon,
   Palette,
   Trash2Icon,
@@ -21,38 +20,30 @@ export default function Home() {
   const widthPickerRef = useRef(null);
   const [ctx, setCtx] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [tool, setTool] = useState("brush"); // brush or eraser
+  const [tool, setTool] = useState("brush");
   const [color, setColor] = useState("#000000");
   const [width, setWidth] = useState(5);
   const [sharedText, setSharedText] = useState("");
   const [socketReady, setSocketReady] = useState(false);
-  const [activeTab, setActiveTab] = useState("canvas"); // 'canvas' or 'notepad'
+  const [activeTab, setActiveTab] = useState("canvas");
   const [showWidthPicker, setShowWidthPicker] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width = window.innerWidth * 0.9;
-    canvas.height = (canvas.width * 9) / 16;
-    const context = canvas.getContext("2d");
-    setCtx(context);
-
-    // Add this to initialize history with blank canvas
-    if (context) {
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-      setHistory([imageData]);
-      setHistoryIndex(0);
+    if (canvas) {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      const context = canvas.getContext("2d");
+      setCtx(context);
     }
 
     const initSocket = async () => {
       await fetch("/api/socket");
       socket = io();
 
-      socket.on("connect", () => {
-        setSocketReady(true);
-      });
-
+      socket.on("connect", () => setSocketReady(true));
       socket.on("draw-line", drawLine);
       socket.on("text-update", (text) => setSharedText(text));
       socket.on("clear-canvas", clearCanvas);
@@ -60,28 +51,35 @@ export default function Home() {
 
     initSocket();
 
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-    };
+    return () => socket?.disconnect();
   }, []);
 
   useEffect(() => {
-    function handleClickOutside(event) {
+    const savedText = localStorage.getItem("notepadText");
+    if (savedText) setSharedText(savedText);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
       if (
         widthPickerRef.current &&
         !widthPickerRef.current.contains(event.target)
       ) {
         setShowWidthPicker(false);
       }
-    }
+    };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas && ctx) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }, [ctx]);
 
   const drawLine = (data) => {
     if (!ctx) return;
@@ -123,18 +121,14 @@ export default function Home() {
     };
 
     drawLine(data);
-    if (socketReady) {
-      socket.emit("draw-line", data);
-    }
+    if (socketReady) socket.emit("draw-line", data);
 
     ctx.lastX = x;
     ctx.lastY = y;
   };
 
   const stopDrawing = () => {
-    if (isDrawing) {
-      saveToHistory();
-    }
+    if (isDrawing) saveToHistory();
     setIsDrawing(false);
     ctx.lastX = undefined;
     ctx.lastY = undefined;
@@ -145,13 +139,27 @@ export default function Home() {
     saveToHistory();
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    localStorage.removeItem("canvasData");
+  };
+
+  const saveTextToLocalStorage = (text) => {
+    localStorage.setItem("notepadText", text);
   };
 
   const handleTextChange = (e) => {
-    setSharedText(e.target.value);
-    if (socketReady) {
-      socket.emit("text-update", e.target.value);
-    }
+    const newText = e.target.value;
+    setSharedText(newText);
+    saveTextToLocalStorage(newText);
+    if (socketReady) socket.emit("text-update", newText);
+
+    // Auto-expand textarea height without collapsing initial height
+    const textarea = e.target;
+    const minHeight = textarea.style.minHeight || "100%";
+    textarea.style.height = minHeight;
+    textarea.style.height = `${Math.max(
+      textarea.scrollHeight,
+      parseInt(minHeight)
+    )}px`;
   };
 
   const saveToHistory = () => {
@@ -201,7 +209,7 @@ export default function Home() {
           <title>Quicc Notes - Print</title>
           <style>
             body {
-              // font-family: system-ui, -apple-system, sans-serif;
+              font-family: 'Inter', system-ui, -apple-system, sans-serif;
               line-height: 1.5;
               padding: 2rem;
               white-space: pre-wrap;
@@ -221,8 +229,8 @@ export default function Home() {
   };
 
   return (
-    <div className="w-fit mx-auto flex flex-col items-center justify-center gap-4 p-4">
-      <div className="w-full flex gap-4 justify-between flex-wrap">
+    <div className="w-full h-screen flex flex-col items-center justify-start p-4 sm:p-6 pt-0 sm:pt-0">
+      <div className="w-full flex gap-4 justify-between flex-wrap p-4">
         <div className="flex gap-4 items-center">
           <h1 className="text-3xl font-extrabold">Quicc Notes</h1>
           <div className="flex flex-nowrap">
@@ -360,9 +368,7 @@ export default function Home() {
                   title="Clear Canvas"
                   onClick={() => {
                     clearCanvas();
-                    if (socketReady) {
-                      socket.emit("clear-canvas");
-                    }
+                    if (socketReady) socket.emit("clear-canvas");
                   }}
                   className="p-3 bg-red-500 text-white rounded-2xl btn-animation"
                 >
@@ -380,19 +386,18 @@ export default function Home() {
         onMouseMove={draw}
         onMouseUp={stopDrawing}
         onMouseOut={stopDrawing}
-        className={
-          `bg-white border border-gray-300 rounded-3xl` +
-          (activeTab === "canvas" ? "" : " hidden")
-        }
+        className={`w-full h-full border border-gray-300 rounded-xl ${
+          activeTab === "canvas" ? "block" : "hidden"
+        }`}
+        style={{ width: "100%", height: "100%" }}
       />
 
       <textarea
         value={sharedText}
         onChange={handleTextChange}
-        className={
-          `w-[90vw] h-[90vh] border border-gray-300 rounded-3xl p-4` +
-          (activeTab === "notepad" ? "" : " hidden")
-        }
+        className={`w-full h-full border border-gray-300 rounded-xl p-4 ${
+          activeTab === "notepad" ? "block" : "hidden"
+        }`}
         placeholder="Type here to share text..."
       />
     </div>
