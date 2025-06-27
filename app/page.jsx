@@ -9,6 +9,7 @@ import {
   Redo2Icon,
   Download,
   Printer,
+  DeleteIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
@@ -30,12 +31,112 @@ export default function Home() {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
+  // Function to determine if a color is light or dark
+  const isLightColor = (hexColor) => {
+    const r = parseInt(hexColor.substr(1, 2), 16);
+    const g = parseInt(hexColor.substr(3, 2), 16);
+    const b = parseInt(hexColor.substr(5, 2), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128;
+  };
+
+  // Flood fill algorithm to erase connected shapes
+  const floodFillErase = (startX, startY) => {
+    if (!ctx) return;
+    
+    const canvas = canvasRef.current;
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Scale coordinates for high-DPI displays
+    const scaledX = Math.floor(startX * dpr);
+    const scaledY = Math.floor(startY * dpr);
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    const getPixelIndex = (x, y) => (y * width + x) * 4;
+    
+    // Check if coordinates are within bounds
+    if (scaledX < 0 || scaledX >= width || scaledY < 0 || scaledY >= height) return;
+    
+    const startIndex = getPixelIndex(scaledX, scaledY);
+    const startR = data[startIndex];
+    const startG = data[startIndex + 1];
+    const startB = data[startIndex + 2];
+    const startA = data[startIndex + 3];
+    
+    // Don't erase if clicking on white background (255, 255, 255, 255)
+    if (startR === 255 && startG === 255 && startB === 255 && startA === 255) return;
+    
+    const stack = [[scaledX, scaledY]];
+    const visited = new Set();
+    
+    // More tolerant color matching to handle anti-aliasing
+    const isSimilarColor = (x, y) => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return false;
+      const index = getPixelIndex(x, y);
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      const a = data[index + 3];
+      
+      // Skip pure white background
+      if (r === 255 && g === 255 && b === 255 && a === 255) return false;
+      
+      // For anti-aliased edges, check if it's a similar color or semi-transparent
+      const colorThreshold = 100; // Increased tolerance for color difference
+      const rDiff = Math.abs(r - startR);
+      const gDiff = Math.abs(g - startG);
+      const bDiff = Math.abs(b - startB);
+      
+      // Match if colors are similar OR if it's a semi-transparent pixel (likely an edge)
+      // OR if it's any non-white pixel (more aggressive)
+      return (rDiff <= colorThreshold && gDiff <= colorThreshold && bDiff <= colorThreshold) || 
+             (a < 255 && a > 0) ||
+             !(r === 255 && g === 255 && b === 255);
+    };
+    
+    while (stack.length > 0) {
+      const [x, y] = stack.pop();
+      
+      if (visited.has(`${x},${y}`)) continue;
+      if (!isSimilarColor(x, y)) continue;
+      
+      visited.add(`${x},${y}`);
+      
+      // Set pixel to white (erase)
+      const index = getPixelIndex(x, y);
+      data[index] = 255;     // R
+      data[index + 1] = 255; // G
+      data[index + 2] = 255; // B
+      data[index + 3] = 255; // A
+      
+      // Add adjacent pixels to stack (4-directional)
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      
+      // Set the actual canvas size based on device pixel ratio
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      
+      // Scale the canvas back down using CSS
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      
       const context = canvas.getContext("2d");
+      // Scale the drawing context so everything draws at the correct size
+      context.scale(dpr, dpr);
       setCtx(context);
     }
 
@@ -47,6 +148,7 @@ export default function Home() {
       socket.on("draw-line", drawLine);
       socket.on("text-update", (text) => setSharedText(text));
       socket.on("clear-canvas", clearCanvas);
+      socket.on("object-erase", (data) => floodFillErase(data.x, data.y));
     };
 
     initSocket();
@@ -76,8 +178,9 @@ export default function Home() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas && ctx) {
+      const dpr = window.devicePixelRatio || 1;
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     }
   }, [ctx]);
 
@@ -93,10 +196,18 @@ export default function Home() {
   };
 
   const startDrawing = (e) => {
-    setIsDrawing(true);
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+    
+    if (tool === "objectEraser") {
+      saveToHistory();
+      floodFillErase(x, y);
+      if (socketReady) socket.emit("object-erase", { x, y });
+      return;
+    }
+    
+    setIsDrawing(true);
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.strokeStyle = tool === "eraser" ? "#ffffff" : color;
@@ -105,7 +216,7 @@ export default function Home() {
   };
 
   const draw = (e) => {
-    if (!isDrawing) return;
+    if (!isDrawing || tool === "objectEraser") return;
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -137,8 +248,9 @@ export default function Home() {
   const clearCanvas = () => {
     if (!ctx) return;
     saveToHistory();
+    const dpr = window.devicePixelRatio || 1;
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    ctx.fillRect(0, 0, canvasRef.current.width / dpr, canvasRef.current.height / dpr);
     localStorage.removeItem("canvasData");
   };
 
@@ -164,6 +276,7 @@ export default function Home() {
 
   const saveToHistory = () => {
     if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
     const imageData = ctx.getImageData(
       0,
       0,
@@ -230,9 +343,9 @@ export default function Home() {
 
   return (
     <div className="w-full h-screen flex flex-col items-center justify-start p-4 sm:p-6 pt-0 sm:pt-0">
-      <div className="w-full flex gap-4 justify-between flex-wrap p-4">
-        <div className="flex gap-4 items-center">
-          <h1 className="text-3xl font-extrabold">Quicc Notes</h1>
+      <div className="w-full flex gap-4 justify-between flex-wrap py-4">
+          <div className="flex gap-4 items-center w-full justify-between sm:w-fit">
+            <h1 className="text-xl sm:text-3xl font-extrabold opacity-50">Quicc Notes</h1>
           <div className="flex flex-nowrap">
             <button
               title="Switch to Canvas"
@@ -257,7 +370,8 @@ export default function Home() {
               Notepad
             </button>
           </div>
-        </div>
+
+          </div>
         <div className="flex gap-4 items-center w-fit">
           {activeTab === "notepad" ? (
             <button
@@ -275,22 +389,14 @@ export default function Home() {
                   onClick={() => setTool("brush")}
                   className={`p-3 rounded-2xl btn-animation ${
                     tool === "brush"
-                      ? "bg-neutral-950 text-white"
-                      : "bg-gray-200 text-gray-700"
+                      ? (isLightColor(color) ? "text-black" : "text-white")
+                      : "text-gray-700"
                   }`}
+                  style={{
+                    backgroundColor: tool === "brush" ? color : "#e5e7eb"
+                  }}
                 >
                   <BrushIcon size={16} />
-                </button>
-                <button
-                  title="Eraser Tool"
-                  onClick={() => setTool("eraser")}
-                  className={`p-3 rounded-2xl btn-animation ${
-                    tool === "eraser"
-                      ? "bg-neutral-950 text-white"
-                      : "bg-gray-200 text-gray-700"
-                  }`}
-                >
-                  <EraserIcon size={16} />
                 </button>
                 <div
                   title="Pick Color"
@@ -306,6 +412,28 @@ export default function Home() {
                     className="absolute inset-0 h-8 w-8 opacity-0 rounded"
                   />
                 </div>
+                <button
+                  title="Eraser Tool"
+                  onClick={() => setTool("eraser")}
+                  className={`p-3 rounded-2xl btn-animation ${
+                    tool === "eraser"
+                      ? "bg-neutral-950 text-white"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  <EraserIcon size={16} />
+                </button>
+                <button
+                  title="Object Eraser Tool"
+                  onClick={() => setTool("objectEraser")}
+                  className={`p-3 rounded-2xl btn-animation ${
+                    tool === "objectEraser"
+                      ? "bg-neutral-950 text-white"
+                      : "bg-gray-200 text-gray-700"
+                  }`}
+                >
+                  <DeleteIcon size={16} />
+                </button>
                 <div className="relative" ref={widthPickerRef}>
                   <button
                     title="Adjust Brush Size"
@@ -389,7 +517,10 @@ export default function Home() {
         className={`w-full h-full border border-gray-300 rounded-xl ${
           activeTab === "canvas" ? "block" : "hidden"
         }`}
-        style={{ width: "100%", height: "100%" }}
+        style={{ 
+          width: "100%", 
+          height: "100%"
+        }}
       />
 
       <textarea
