@@ -4,6 +4,14 @@ import { Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSharedState } from "@airstate/react"
 
+// import the `configure` function
+import { configure } from '@airstate/client';
+
+// configure the client to use it.
+configure({
+    appKey: 'pk_airstate_cXAnMcBjlurI5204rOZUc',
+});
+
 export default function Home() {
   const [sharedText, setSharedText] = useSharedState("");
 
