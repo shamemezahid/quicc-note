@@ -1,5 +1,6 @@
 import { Figtree, Merriweather_Sans, Red_Hat_Mono } from "next/font/google";
 import "./globals.css";
+import { configure } from '@airstate/client';
 
 export const metadata = {
   title: "Quicc Notes",
@@ -7,6 +8,10 @@ export const metadata = {
 };
 
 const font = Red_Hat_Mono({ subsets: ["latin"] });
+
+configure({
+    appKey: 'pk_airstate_cXAnMcBjlurI5204rOZUc',
+});
 
 export default function RootLayout({ children }) {
   return (
