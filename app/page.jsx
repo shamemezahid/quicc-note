@@ -74,8 +74,8 @@ function Sidebar({
 
   return (
     <div
-      className="bg-white border border-gray-300 rounded-xl transition-all duration-300 ease-in-out flex-shrink-0"
-      style={{ width: "200px", height: "calc(100vh - 2rem)" }}
+      className="h-full bg-white border border-gray-300 rounded-xl transition-all duration-300 ease-in-out flex-shrink-0"
+      style={{ width: "200px" }}
     >
       <div className="flex flex-col h-full p-4">
         {/* New Page Button */}
