@@ -445,34 +445,18 @@ export default function Home() {
 
   const printText = () => {
     const content = currentPage ? currentPage.content : "";
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Quicc Notes - Print</title>
-          <style>
-            body {
-              font-family: 'Inter', system-ui, -apple-system, sans-serif;
-              line-height: 1.5;
-              padding: 2rem;
-              white-space: pre-wrap;
-            }
-            @media print {
-              body {
-                padding: 0;
-              }
-            }
-          </style>
-        </head>
-        <body>${content}</body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+    const title = currentPage ? currentPage.name : "Quicc Notes";
+    
+    // Navigate to print route with content
+    const params = new URLSearchParams({
+      content,
+      title
+    });
+    window.open(`/print?${params.toString()}`, "_blank");
   };
 
   return (
-    <div className="w-full h-screen flex flex-row items-start justify-start p-4 pt-2 sm:p-6 sm:pt-2 gap-4">
+    <div className="w-full h-screen flex flex-row items-start justify-start p-4 gap-4">
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full">
         {/* Delete Confirmation Modal */}
@@ -499,7 +483,7 @@ export default function Home() {
         )}
 
         {/* Top Bar */}
-        <div className="w-full flex gap-4 justify-between py-4">
+        <div className="w-full flex gap-4 justify-between pb-3">
           <div className="flex gap-2 items-center w-full justify-between sm:w-fit">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
