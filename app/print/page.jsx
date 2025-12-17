@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function PrintPage() {
+function PrintContent() {
   const searchParams = useSearchParams();
   const content = searchParams.get("content") || "";
   const title = searchParams.get("title") || "Quicc Notes";
@@ -40,5 +40,13 @@ export default function PrintPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function PrintPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen p-16">Loading...</div>}>
+      <PrintContent />
+    </Suspense>
   );
 }
