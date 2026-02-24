@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer, Menu, MoreVertical } from "lucide-react";
+import { Printer, Menu, MoreVertical, GripVertical } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 
 const MAX_PAGES = Math.pow(2, 12); // 4096 pages
@@ -268,12 +268,37 @@ export default function Home() {
   const [pages, setPages] = useState({});
   const [currentPageId, setCurrentPageId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(200);
   const [editingPageId, setEditingPageId] = useState(null);
   const [editingName, setEditingName] = useState("");
   const [menuOpenPageId, setMenuOpenPageId] = useState(null);
   const [deleteConfirmPageId, setDeleteConfirmPageId] = useState(null);
 
   const editInputRef = useRef(null);
+  const topBarInputRef = useRef(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const [editingTopBarTitle, setEditingTopBarTitle] = useState(false);
+
+  // Sidebar resize drag handlers
+  const onDragStart = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (e) => {
+      const newWidth = Math.min(Math.max(e.clientX, 200), window.innerWidth * 0.3);
+      setSidebarWidth(newWidth);
+    };
+    const onUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  };
 
   // Initialize pages from localStorage
   useEffect(() => {
@@ -484,16 +509,62 @@ export default function Home() {
 
         {/* Top Bar */}
         <div className="w-full flex gap-4 justify-between pb-3">
-          <div className="flex gap-2 items-center w-full justify-between sm:w-fit">
+          <div className={`flex gap-2 items-center w-full justify-between ${editingTopBarTitle ? "" : "sm:w-fit"}`}>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 hover:bg-gray-100 rounded-xl"
             >
               <Menu size={20} />
             </button>
-            <h1 className="text-base sm:text-lg font-bold opacity-50 line-clamp-1">
-              {currentPage ? truncateName(currentPage.name) : "Quicc Notes"}
-            </h1>
+            {editingTopBarTitle && currentPageId ? (
+              <input
+                ref={topBarInputRef}
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (editingName.trim()) {
+                      const trimmedName = editingName.trim().slice(0, PAGE_NAME_LIMIT);
+                      const updatedPages = {
+                        ...pages,
+                        [currentPageId]: {
+                          ...pages[currentPageId],
+                          name: trimmedName,
+                          lastEdited: Date.now(),
+                        },
+                      };
+                      savePages(updatedPages);
+                    }
+                    setEditingTopBarTitle(false);
+                    setEditingName("");
+                  }
+                  if (e.key === "Escape") {
+                    setEditingTopBarTitle(false);
+                    setEditingName("");
+                  }
+                }}
+                onBlur={() => {
+                  setEditingTopBarTitle(false);
+                  setEditingName("");
+                }}
+                maxLength={PAGE_NAME_LIMIT}
+                className="text-base sm:text-lg font-bold bg-transparent border-b border-gray-400 outline-none w-full"
+              />
+            ) : (
+              <h1
+                onDoubleClick={() => {
+                  if (currentPageId) {
+                    setEditingName(pages[currentPageId].name);
+                    setEditingTopBarTitle(true);
+                    setTimeout(() => topBarInputRef.current?.focus(), 0);
+                  }
+                }}
+                className="text-base sm:text-lg font-bold opacity-50 line-clamp-1 cursor-default"
+              >
+                {currentPage ? truncateName(currentPage.name) : "Quicc Notes"}
+              </h1>
+            )}
           </div>
           <div className="flex gap-4 items-center w-fit">
             <button
@@ -506,12 +577,13 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex gap-4 h-full w-full">
+        <div
+          className={`h-full w-full grid ${isResizing ? "" : "transition-[grid-template-columns,gap] duration-300 ease-in-out"}`}
+          style={{ gridTemplateColumns: sidebarOpen ? `${sidebarWidth}px 1rem 1fr` : "0px 0px 1fr" }}
+        >
           {/* Sidebar */}
-          {sidebarOpen && (
             <div
-              className="h-full transition-all duration-300 ease-in-out flex-shrink-0"
-              style={{ width: "200px"}}
+              className="h-full min-w-0 overflow-hidden"
             >
               <div className="flex flex-col h-full">
                 {/* New Page Button */}
@@ -614,7 +686,18 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          )}
+
+          {/* Drag handle */}
+          <div
+            onPointerDown={onDragStart}
+            onDoubleClick={() => setSidebarWidth(200)}
+            className="h-full cursor-col-resize flex items-center justify-center group"
+          >
+            <GripVertical
+              size={12}
+              className="text-gray-300 group-hover:text-gray-400 transition-colors"
+            />
+          </div>
 
           {/* Textarea */}
           <textarea

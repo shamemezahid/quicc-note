@@ -16,7 +16,7 @@ configure({
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={font.className + ` bg-gradient-to-br from-teal-100/50 via-lime-100/50 to-emerald-100/50`}>
+      <body className={font.className + ` bg-slate-200 bg-gradient-to-br from-teal-100/20 via-lime-100/20 to-emerald-100/20`}>
         {children}
       </body>
     </html>
