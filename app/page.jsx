@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer, Menu, MoreVertical, GripVertical } from "lucide-react";
+import { Printer, Menu, MoreVertical, GripVertical, Download, Upload, Trash2 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 
 const MAX_PAGES = Math.pow(2, 12); // 4096 pages
@@ -49,6 +49,142 @@ const truncateName = (name) => {
   if (name.length <= DISPLAY_NAME_LIMIT) return name;
   return name.slice(0, DISPLAY_NAME_LIMIT) + "...";
 };
+
+const IMPORT_ERROR_MESSAGE = "Improper formatting or wrong file uploaded";
+
+const exportMonthNames = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const formatExportFilename = (timestamp) => {
+  const date = new Date(timestamp);
+  const YYYY = date.getFullYear();
+  const MMM = exportMonthNames[date.getMonth()];
+  const DD = String(date.getDate()).padStart(2, "0");
+  const HH = String(date.getHours()).padStart(2, "0");
+  const MM = String(date.getMinutes()).padStart(2, "0");
+  const SS = String(date.getSeconds()).padStart(2, "0");
+  return `Quicc-Note-Export-${YYYY}-${MMM}-${DD}-${HH}-${MM}-${SS}.json`;
+};
+
+const downloadJsonFile = (filename, data) => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const downloadUrl = URL.createObjectURL(blob);
+  const downloadLink = document.createElement("a");
+  downloadLink.href = downloadUrl;
+  downloadLink.download = filename;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+};
+
+const normalizeImportedPage = (page, index) => {
+  if (!page || typeof page !== "object" || Array.isArray(page)) {
+    throw new Error(IMPORT_ERROR_MESSAGE);
+  }
+
+  const createdDate =
+    typeof page.createdDate === "number" && Number.isFinite(page.createdDate)
+      ? page.createdDate
+      : Date.now() + index;
+  const lastEdited =
+    typeof page.lastEdited === "number" && Number.isFinite(page.lastEdited)
+      ? page.lastEdited
+      : createdDate;
+  const name =
+    typeof page.name === "string" && page.name.trim()
+      ? page.name.trim().slice(0, PAGE_NAME_LIMIT)
+      : formatDefaultTitle(createdDate);
+
+  return {
+    id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 10)}`,
+    name,
+    content: typeof page.content === "string" ? page.content : "",
+    createdDate,
+    lastEdited,
+  };
+};
+
+const normalizeImportedPages = (pages) => {
+  if (!Array.isArray(pages)) {
+    throw new Error(IMPORT_ERROR_MESSAGE);
+  }
+
+  return pages.map((page, index) => normalizeImportedPage(page, index));
+};
+
+const serializePagesForExport = (pages) =>
+  Object.values(pages)
+    .sort((left, right) => right.lastEdited - left.lastEdited)
+    .map(({ id, name, content, createdDate, lastEdited }) => ({
+      id,
+      name,
+      content,
+      createdDate,
+      lastEdited,
+    }));
+
+function ModalShell({
+  title,
+  description,
+  onClose,
+  children,
+  footer,
+  showHeaderClose = true,
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+      role="presentation"
+      onMouseDown={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <h2 className="text-[20px] font-semibold text-neutral-800">
+              {title}
+            </h2>
+            {description ? (
+              <p className="text-sm font-normal leading-6 text-neutral-500">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {showHeaderClose ? (
+            <button
+              onClick={onClose}
+              className="rounded-full px-3 py-1 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+            >
+              Close
+            </button>
+          ) : null}
+        </div>
+
+        {children ? <div className="mt-5">{children}</div> : null}
+        {footer ? <div className="mt-6">{footer}</div> : null}
+      </div>
+    </div>
+  );
+}
 
 // Sidebar Component
 function Sidebar({ 
@@ -218,25 +354,133 @@ function DeleteConfirmModal({ deleteConfirmPageId, setDeleteConfirmPageId, delet
   if (!deleteConfirmPageId) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-xl max-w-sm">
-        <p className="mb-4">Are you sure you want to delete this page?</p>
-        <div className="flex gap-2 justify-end">
+    <ModalShell
+      title="Delete this page?"
+      description="This action will remove the page from your local browser storage."
+      onClose={() => setDeleteConfirmPageId(null)}
+    >
+      <div className="flex gap-2 justify-end">
           <button
             onClick={() => setDeleteConfirmPageId(null)}
-            className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded"
+            className="px-4 py-2 rounded-xl border border-neutral-200 bg-white text-neutral-700 transition-colors hover:bg-neutral-50"
           >
             Cancel
           </button>
           <button
             onClick={() => deletePage(deleteConfirmPageId)}
-            className="px-4 py-2 bg-white text-red-600 border border-gray-300 rounded"
+            className="px-4 py-2 rounded-xl bg-neutral-950 text-white transition-opacity hover:opacity-90"
           >
             Delete
           </button>
-        </div>
       </div>
-    </div>
+    </ModalShell>
+  );
+}
+
+function ExportDataModal({ onClose, onExport }) {
+  return (
+    <ModalShell
+      title="Export Data"
+      description="All your notes are saved securely and locally in your browser. You can export them as a JSON file for backup or import them in another computer or browser."
+      onClose={onClose}
+      footer={
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+          >
+            Close
+          </button>
+          <button
+            onClick={onExport}
+            className="rounded-xl bg-neutral-950 px-4 py-2 text-sm text-white btn-animation"
+          >
+            Export
+          </button>
+        </div>
+      }
+    />
+  );
+}
+
+function ImportDataModal({
+  onClose,
+  onChooseFile,
+  onImport,
+  importInputRef,
+  selectedFileName,
+  importError,
+}) {
+  return (
+    <ModalShell
+      title="Import Data"
+      description="You can import your previously exported notes into this browser. Or, make your own JSON archive and import it. Please keep in mind this importing tool doesn't check for duplicates."
+      onClose={onClose}
+      footer={
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+          >
+            Close
+          </button>
+          <button
+            onClick={onImport}
+            disabled={!selectedFileName}
+            className="rounded-xl bg-neutral-950 px-4 py-2 text-sm text-white btn-animation disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Import
+          </button>
+        </div>
+      }
+    >
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={onChooseFile}
+        className="hidden"
+      />
+      <div className="space-y-3">
+        <button
+          onClick={() => importInputRef.current?.click()}
+          className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100"
+        >
+          Choose JSON File
+        </button>
+        <div className="text-sm text-neutral-500">
+          {selectedFileName ? (
+            <span>{selectedFileName}</span>
+          ) : (
+            <span>No file selected</span>
+          )}
+        </div>
+        {importError ? (
+          <p className="text-sm text-red-600">{importError}</p>
+        ) : null}
+      </div>
+    </ModalShell>
+  );
+}
+
+function DeleteAllDataModal({ onClose }) {
+  return (
+    <ModalShell
+      title="Delete all data"
+      description="Don't worry, you can't actually delete all your data from the app. To actually delete all your data, Go to the devtools of your browser, and clear all data."
+      onClose={onClose}
+      showHeaderClose={false}
+      footer={
+        <div className="flex items-center justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-xl bg-neutral-950 px-4 py-2 text-sm text-white btn-animation"
+          >
+            Close
+          </button>
+        </div>
+      }
+    />
   );
 }
 
@@ -276,8 +520,15 @@ export default function Home() {
 
   const editInputRef = useRef(null);
   const topBarInputRef = useRef(null);
+  const importInputRef = useRef(null);
+  const dataMenuRef = useRef(null);
   const [isResizing, setIsResizing] = useState(false);
   const [editingTopBarTitle, setEditingTopBarTitle] = useState(false);
+  const [dataMenuOpen, setDataMenuOpen] = useState(false);
+  const [dataModalType, setDataModalType] = useState(null);
+  const [importFileName, setImportFileName] = useState("");
+  const [importFile, setImportFile] = useState(null);
+  const [importError, setImportError] = useState("");
 
   // Sidebar resize drag handlers
   const onDragStart = (e) => {
@@ -336,10 +587,119 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!dataMenuOpen) return;
+
+    const handlePointerDown = (event) => {
+      if (dataMenuRef.current && !dataMenuRef.current.contains(event.target)) {
+        setDataMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setDataMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [dataMenuOpen]);
+
   // Save pages to localStorage
   const savePages = (updatedPages) => {
     localStorage.setItem("quicc_notes_data", JSON.stringify(updatedPages));
     setPages(updatedPages);
+  };
+
+  const closeDataModal = () => {
+    setDataModalType(null);
+    setImportFile(null);
+    setImportFileName("");
+    setImportError("");
+    if (importInputRef.current) {
+      importInputRef.current.value = "";
+    }
+  };
+
+  const openDataModal = (type) => {
+    setMenuOpenPageId(null);
+    setDataMenuOpen(false);
+    setDataModalType(type);
+    setImportError("");
+
+    if (type !== "import") {
+      setImportFile(null);
+      setImportFileName("");
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
+  };
+
+  const exportPages = () => {
+    const exportData = serializePagesForExport(pages);
+    downloadJsonFile(formatExportFilename(Date.now()), exportData);
+    closeDataModal();
+  };
+
+  const handleImportFileChange = (event) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      setImportFile(null);
+      setImportFileName("");
+      setImportError("");
+      return;
+    }
+
+    setImportFile(file);
+    setImportFileName(file.name);
+    setImportError("");
+  };
+
+  const handleImportData = async () => {
+    try {
+      if (!importFile) {
+        throw new Error(IMPORT_ERROR_MESSAGE);
+      }
+
+      if (!importFile.name.toLowerCase().endsWith(".json")) {
+        throw new Error(IMPORT_ERROR_MESSAGE);
+      }
+
+      const rawText = await importFile.text();
+      const parsedData = JSON.parse(rawText);
+      const normalizedImportedPages = normalizeImportedPages(parsedData);
+      const importedPagesMap = normalizedImportedPages.reduce(
+        (accumulator, page) => {
+          accumulator[page.id] = page;
+          return accumulator;
+        },
+        {}
+      );
+
+      const updatedPages = {
+        ...pages,
+        ...importedPagesMap,
+      };
+
+      savePages(updatedPages);
+
+      if (!currentPageId && normalizedImportedPages[0]) {
+        setCurrentPageId(normalizedImportedPages[0].id);
+      }
+
+      closeDataModal();
+    } catch (error) {
+      console.error(error);
+      setImportError(IMPORT_ERROR_MESSAGE);
+    }
   };
 
   // Create new page
@@ -481,31 +841,15 @@ export default function Home() {
   };
 
   return (
+    <>
     <div className="w-full h-screen flex flex-row items-start justify-start p-4 gap-4">
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full">
-        {/* Delete Confirmation Modal */}
-        {deleteConfirmPageId && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-xl max-w-sm">
-              <p className="mb-4">Are you sure you want to delete this page?</p>
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => setDeleteConfirmPageId(null)}
-                  className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => deletePage(deleteConfirmPageId)}
-                  className="px-4 py-2 bg-white text-red-600 border border-gray-300 rounded"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <DeleteConfirmModal
+          deleteConfirmPageId={deleteConfirmPageId}
+          setDeleteConfirmPageId={setDeleteConfirmPageId}
+          deletePage={deletePage}
+        />
 
         {/* Top Bar */}
         <div className="w-full flex gap-4 justify-between pb-3">
@@ -566,7 +910,7 @@ export default function Home() {
               </h1>
             )}
           </div>
-          <div className="flex gap-4 items-center w-fit">
+          <div className="flex items-center gap-2 w-fit">
             <button
               title="Print Text"
               onClick={printText}
@@ -574,6 +918,44 @@ export default function Home() {
             >
               <Printer size={16} className="stroke-white" />
             </button>
+
+            <div ref={dataMenuRef} className="relative">
+              <button
+                title="More actions"
+                aria-haspopup="menu"
+                aria-expanded={dataMenuOpen}
+                onClick={() => setDataMenuOpen((open) => !open)}
+                className="p-3 rounded-2xl border border-neutral-200 bg-white text-neutral-900 btn-animation hover:bg-neutral-50"
+              >
+                <MoreVertical size={16} className="stroke-neutral-900" />
+              </button>
+
+              {dataMenuOpen ? (
+                <div className="absolute right-0 mt-2 min-w-52 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-xl z-30">
+                  <button
+                    onClick={() => openDataModal("export")}
+                    className="flex items-center w-full px-4 py-3 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                  >
+                    <Download size={16} className="stroke-neutral-400 mr-3" />
+                    <span>Export Data</span>
+                  </button>
+                  <button
+                    onClick={() => openDataModal("import")}
+                    className="flex items-center w-full px-4 py-3 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                  >
+                    <Upload size={16} className="stroke-neutral-400 mr-3" />
+                    <span>Import Data</span>
+                  </button>
+                  <button
+                    onClick={() => openDataModal("delete-all")}
+                    className="flex items-center w-full px-4 py-3 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                  >
+                    <Trash2 size={16} className="stroke-neutral-400 mr-3" />
+                    <span>Delete all data</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -709,5 +1091,25 @@ export default function Home() {
         </div>
       </div>
     </div>
+
+    {dataModalType === "export" ? (
+      <ExportDataModal onClose={closeDataModal} onExport={exportPages} />
+    ) : null}
+
+    {dataModalType === "import" ? (
+      <ImportDataModal
+        onClose={closeDataModal}
+        onChooseFile={handleImportFileChange}
+        onImport={handleImportData}
+        importInputRef={importInputRef}
+        selectedFileName={importFileName}
+        importError={importError}
+      />
+    ) : null}
+
+    {dataModalType === "delete-all" ? (
+      <DeleteAllDataModal onClose={closeDataModal} />
+    ) : null}
+    </>
   );
 }
